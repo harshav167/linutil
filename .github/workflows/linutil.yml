@@ -50,12 +50,15 @@ jobs:
       - name: Build arm64 (armv7) binary
         run: cross build --target-dir=build --release --verbose --target=armv7-unknown-linux-musleabihf
 
+      - name: Build ARM64 macOS binary
+        run: cargo build --target aarch64-apple-darwin --release
+
       - name: Move binaries to build directory
         run: |
           mv build/x86_64-unknown-linux-musl/release/linutil build/linutil
           mv build/aarch64-unknown-linux-musl/release/linutil build/linutil-aarch64
           mv build/armv7-unknown-linux-musleabihf/release/linutil build/linutil-arm64
-
+          mv build/aarch64-apple-darwin/release/linutil build/linutil-arm64-macos
       - name: Pull latest changes
         run: |
           git config --global user.email "github-actions@github.com"
@@ -88,6 +91,7 @@ jobs:
             ./build/linutil
             ./build/linutil-aarch64
             ./build/linutil-arm64
+            ./build/linutil-arm64-macos
             ./start.sh
             ./startdev.sh
         env:

@@ -17,11 +17,25 @@ check() {
 }
 
 findArch() {
-    case "$(uname -m)" in
-        x86_64|amd64) arch="x86_64" ;;
-        aarch64) arch="aarch64" ;;
-        armv7l|armv8l) arch="arm64" ;;
-        *) check 1 "Unsupported architecture"
+    os=$(uname -s)
+    machine=$(uname -m)
+    case "$os" in
+        Darwin)
+            case "$machine" in
+                arm64) arch="arm64-macos" ;;
+                *) check 1 "Unsupported macOS architecture: $machine"
+            esac
+            ;;
+        Linux)
+            case "$machine" in
+                x86_64|amd64) arch="x86_64" ;;
+                aarch64) arch="aarch64" ;;
+                armv7l|armv8l|arm64) arch="arm64" ;;
+                *) check 1 "Unsupported Linux architecture: $machine"
+            esac
+            ;;
+        *)
+            check 1 "Unsupported operating system: $os"
     esac
 }
 
@@ -43,13 +57,18 @@ getUrl() {
         arm64)
             echo "https://github.com/harshav167/linutil/releases/download/$latest_release/linutil-arm64"
             ;;
+        arm64-macos)
+            echo "https://github.com/harshav167/linutil/releases/download/$latest_release/linutil-arm64-macos"
+            ;;
         *)
-            check 1 "Unsupported architecture"
+            check 1 "Unsupported architecture: $arch"
             ;;
     esac
 }
 
 findArch
+echo "Detected architecture: $arch"
+
 temp_file=$(mktemp)
 check $? "Creating the temporary file"
 
