@@ -36,7 +36,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl
+          targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf
 
       - name: Install cross-rs for cross-compilation
         run: cargo install cross
@@ -44,13 +44,17 @@ jobs:
       - name: Build x86_64 binary
         run: cargo build --target-dir=build --release --verbose --target=x86_64-unknown-linux-musl
 
-      - name: Build ARM binary
-        run: cross build --target-dir=build --release --verbose --target=aarch64-unknown-linux-gnu
+      - name: Build aarch64 binary
+        run: cross build --target-dir=build --release --verbose --target=aarch64-unknown-linux-musl
+
+      - name: Build arm64 (armv7) binary
+        run: cross build --target-dir=build --release --verbose --target=armv7-unknown-linux-musleabihf
 
       - name: Move binaries to build directory
         run: |
           mv build/x86_64-unknown-linux-musl/release/linutil build/linutil
-          mv build/aarch64-unknown-linux-gnu/release/linutil build/linutil-aarch64
+          mv build/aarch64-unknown-linux-musl/release/linutil build/linutil-aarch64
+          mv build/armv7-unknown-linux-musleabihf/release/linutil build/linutil-arm64
 
       - name: Pull latest changes
         run: |
@@ -83,6 +87,7 @@ jobs:
           files: |
             ./build/linutil
             ./build/linutil-aarch64
+            ./build/linutil-arm64
             ./start.sh
             ./startdev.sh
         env:

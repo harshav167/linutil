@@ -19,7 +19,8 @@ check() {
 findArch() {
     case "$(uname -m)" in
         x86_64|amd64) arch="x86_64" ;;
-        aarch64|arm64) arch="aarch64" ;;
+        aarch64) arch="aarch64" ;;
+        armv7l|armv8l) arch="arm64" ;;
         *) check 1 "Unsupported architecture"
     esac
 }
@@ -38,6 +39,9 @@ getUrl() {
             ;;
         aarch64)
             echo "https://github.com/harshav167/linutil/releases/download/$latest_release/linutil-aarch64"
+            ;;
+        arm64)
+            echo "https://github.com/harshav167/linutil/releases/download/$latest_release/linutil-arm64"
             ;;
         *)
             check 1 "Unsupported architecture"
