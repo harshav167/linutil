@@ -13,9 +13,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  linutil_build:
+  build_linux:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -24,79 +23,102 @@ jobs:
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-registry-
-
-      - name: Cache Cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-index-
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf,aarch64-apple-darwin
+          targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf
 
-      - name: Install cross-rs for cross-compilation
+      - name: Install cross-rs
         run: cargo install cross
 
       - name: Build x86_64 binary
-        run: cargo build --target-dir=build --release --verbose --target=x86_64-unknown-linux-musl
+        run: cargo build --target x86_64-unknown-linux-musl --release
 
       - name: Build aarch64 binary
-        run: cross build --target-dir=build --release --verbose --target=aarch64-unknown-linux-musl
+        run: cross build --target aarch64-unknown-linux-musl --release
 
       - name: Build arm64 (armv7) binary
-        run: cross build --target-dir=build --release --verbose --target=armv7-unknown-linux-musleabihf
+        run: cross build --target armv7-unknown-linux-musleabihf --release
+
+      - name: Prepare binaries
+        run: |
+          mkdir -p build
+          mv target/x86_64-unknown-linux-musl/release/linutil build/linutil
+          mv target/aarch64-unknown-linux-musl/release/linutil build/linutil-aarch64
+          mv target/armv7-unknown-linux-musleabihf/release/linutil build/linutil-arm64
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-binaries
+          path: build/*
+
+  build_macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
 
       - name: Build ARM64 macOS binary
         run: |
           rustup target add aarch64-apple-darwin
           cargo build --target aarch64-apple-darwin --release
 
-      - name: Move binaries to build directory
+      - name: Prepare binary
         run: |
-          mv build/x86_64-unknown-linux-musl/release/linutil build/linutil
-          mv build/aarch64-unknown-linux-musl/release/linutil build/linutil-aarch64
-          mv build/armv7-unknown-linux-musleabihf/release/linutil build/linutil-arm64
+          mkdir -p build
           mv target/aarch64-apple-darwin/release/linutil build/linutil-arm64-macos
 
-      - name: Pull latest changes
-        run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git pull origin main
-
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v3
         with:
-          commit_message: Commit Linutil
-          file_pattern: "build/linutil"
-          add_options: '--force'
-        if: success()
+          name: macos-binary
+          path: build/linutil-arm64-macos
 
-      - name: Extract Version
-        id: extract_version
-        run: |
-          version=$(date +"%Y.%m.%d")
-          echo "version=$version" >> $GITHUB_ENV
+  create_release:
+    needs: [build_linux, build_macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Create and Upload Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
         with:
-          tag_name: ${{ env.version }}
-          name: Release ${{ env.version }}
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir release
+          cp artifacts/linux-binaries/* release/
+          cp artifacts/macos-binary/* release/
+          cp start.sh release/
+          cp startdev.sh release/
+
+      - name: Generate release version
+        id: version
+        run: echo "version=$(date +'%Y.%m.%d')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
           body: |
             Changes in this release:
             - Built and released the latest version of LinUtil
-          files: |
-            ./build/linutil
-            ./build/linutil-aarch64
-            ./build/linutil-arm64
-            ./build/linutil-arm64-macos
-            ./start.sh
-            ./startdev.sh
+          files: release/*
         env:
-          version: ${{ env.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update main branch
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git add release/*
+          git commit -m "Update binaries for release ${{ steps.version.outputs.version }}"
+          git push origin main
